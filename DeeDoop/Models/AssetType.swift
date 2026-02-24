@@ -24,8 +24,7 @@ enum AssetType: String, CaseIterable, Identifiable {
     
     var isAvailable: Bool {
         switch self {
-        case .photos, .videos, .files: return true
-        case .contacts: return false
+        case .photos, .videos, .files, .contacts: return true
         }
     }
     

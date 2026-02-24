@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct DocumentsFlowView: View {
     @StateObject private var docService = DocumentDuplicateService()
@@ -80,15 +81,35 @@ struct DocumentFolderStepView: View {
 
 struct DocumentScanResultsView: View {
     @ObservedObject var docService: DocumentDuplicateService
-    
+    @State private var mode: Mode = .duplicates
+
+    enum Mode { case duplicates, bySize }
+
+    private var hasAnyResults: Bool {
+        !docService.duplicateGroups.isEmpty || !docService.filesBySizeItems.isEmpty
+    }
+
     var body: some View {
         Group {
             if docService.isScanning {
                 DocumentScanningView(progress: docService.scanProgress)
-            } else if docService.duplicateGroups.isEmpty {
+            } else if !hasAnyResults {
                 DocumentNoDuplicatesView()
             } else {
-                DocumentDuplicateGroupsListView(docService: docService)
+                VStack(spacing: 0) {
+                    Picker("View", selection: $mode) {
+                        Text("Duplicates").tag(Mode.duplicates)
+                        Text("By size").tag(Mode.bySize)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding()
+
+                    if mode == .duplicates {
+                        DocumentDuplicateGroupsListView(docService: docService)
+                    } else {
+                        FileSizeListView(docService: docService)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -140,6 +161,7 @@ struct DocumentDuplicateGroupsListView: View {
     @State private var showRemoveAllConfirmation = false
     @State private var isRemovingAll = false
     @State private var removeAllError: String?
+    @State private var isGroupsExpanded = true
     
     var body: some View {
         List {
@@ -174,12 +196,32 @@ struct DocumentDuplicateGroupsListView: View {
                         .foregroundStyle(.red)
                 }
             }
-            
-            ForEach(docService.duplicateGroups) { group in
-                NavigationLink {
-                    FileDuplicateGroupDetailView(group: group, docService: docService)
-                } label: {
-                    FileDuplicateGroupRow(group: group)
+
+            if !docService.duplicateGroups.isEmpty {
+                Section {
+                    if isGroupsExpanded {
+                        ForEach(docService.duplicateGroups) { group in
+                            NavigationLink {
+                                FileDuplicateGroupDetailView(group: group, docService: docService)
+                            } label: {
+                                FileDuplicateGroupRow(group: group)
+                            }
+                        }
+                    }
+                } header: {
+                    HStack {
+                        Text("Duplicate groups")
+                        Spacer()
+                        Image(systemName: isGroupsExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation {
+                            isGroupsExpanded.toggle()
+                        }
+                    }
                 }
             }
         }
@@ -300,6 +342,24 @@ struct FileDuplicateGroupDetailView: View {
                 }
                 
                 VStack(spacing: 12) {
+                    if let keepIndex = selectedKeepIndex {
+                        Button {
+                            let url = group.fileURLs[keepIndex]
+                            UIPasteboard.general.string = url.lastPathComponent
+                            errorMessage = "File name copied to clipboard."
+                        } label: {
+                            HStack {
+                                Image(systemName: "doc.on.clipboard")
+                                Text("Copy selected file name")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.gray.opacity(0.12))
+                            .foregroundColor(.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                        .disabled(isDeleting)
+                    }
                     Button {
                         removeDuplicates()
                     } label: {
@@ -394,6 +454,126 @@ struct FileDuplicateGroupDetailView: View {
             errorMessage = error.localizedDescription
         }
         isDeleting = false
+    }
+}
+
+struct FileSizeListView: View {
+    @ObservedObject var docService: DocumentDuplicateService
+    @State private var selectedIDs = Set<String>()
+    @State private var isDeleting = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        List {
+            Section {
+                Text("\(docService.filesBySizeItems.count) file(s) in this folder")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    performDeleteSelected()
+                } label: {
+                    HStack {
+                        Image(systemName: "trash")
+                        Text("Move selected to trash")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .foregroundColor(.red)
+                }
+                .disabled(selectedIDs.isEmpty || isDeleting)
+
+                if isDeleting {
+                    HStack {
+                        ProgressView()
+                        Text("Moving to trash…")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if let error = errorMessage {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            Section {
+                ForEach(docService.filesBySizeItems) { item in
+                    FileSizeRow(
+                        item: item,
+                        isSelected: selectedIDs.contains(item.id)
+                    ) {
+                        if selectedIDs.contains(item.id) {
+                            selectedIDs.remove(item.id)
+                        } else {
+                            selectedIDs.insert(item.id)
+                        }
+                    }
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .listStyle(.insetGrouped)
+    }
+
+    private func performDeleteSelected() {
+        guard !selectedIDs.isEmpty else { return }
+        errorMessage = nil
+        isDeleting = true
+        do {
+            try docService.deleteFilesBySizeItems(withIDs: selectedIDs)
+            selectedIDs.removeAll()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isDeleting = false
+    }
+}
+
+struct FileSizeRow: View {
+    let item: DocumentDuplicateService.FileBySizeItem
+    let isSelected: Bool
+    let onToggleSelection: () -> Void
+
+    private var dateText: String {
+        guard let date = item.creationDate else { return "Unknown date" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    var body: some View {
+        Button(action: onToggleSelection) {
+            HStack(spacing: 12) {
+                Image(systemName: "doc.fill")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.15)))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.url.lastPathComponent)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(ByteCountFormatter.string(fromByteCount: item.fileSize, countStyle: .file))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(dateText)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer()
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isSelected ? Color.orange : Color.secondary.opacity(0.5))
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
     }
 }
 

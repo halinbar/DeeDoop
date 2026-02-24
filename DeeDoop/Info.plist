@@ -14,10 +14,14 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSContactsUsageDescription</key>
+	<string>DeeDoop needs access to your contacts to find and help you clean up duplicate entries.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIRequiresFullScreen</key>
 	<true/>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>DeeDoop needs permission to delete duplicate photos and videos you choose to remove.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>DeeDoop needs access to your photo library to scan for duplicate photos and videos, and to remove them when you choose.</string>
 </dict>

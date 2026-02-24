@@ -36,7 +36,7 @@ struct PhotosFlowView: View {
                         }
                     )
                 } else {
-                    ScanResultsView(photoService: photoService)
+                    ScanResultsView(photoService: photoService, mediaFilter: mediaFilter)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

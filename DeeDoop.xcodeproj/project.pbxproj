@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1000001 /* DeeDoopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001 /* DeeDoopApp.swift */; };
 		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002 /* ContentView.swift */; };
 		A1000003 /* AssetType.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* AssetType.swift */; };
 		A1000004 /* DuplicateGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004 /* DuplicateGroup.swift */; };
@@ -25,12 +26,17 @@
 		A1000018 /* AppHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000018 /* AppHeaderView.swift */; };
 		A1000019 /* UIHostingController+FullScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000019 /* UIHostingController+FullScreen.swift */; };
 		A1000021 /* FullScreenHostingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000021 /* FullScreenHostingViewController.swift */; };
-		A1000022 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000022 /* AppDelegate.swift */; };
 		A1000023 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A2000023 /* LaunchScreen.storyboard */; };
+		A1000024 /* DeletedItemsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000024 /* DeletedItemsStore.swift */; };
+		A1000025 /* ContactsFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000025 /* ContactsFlowView.swift */; };
+		A1000026 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000026 /* HistoryView.swift */; };
+		A1000027 /* ContactDuplicateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000027 /* ContactDuplicateService.swift */; };
+		A1000028 /* ContactDuplicateGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000028 /* ContactDuplicateGroup.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A2000000 /* DeeDoop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DeeDoop.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000001 /* DeeDoopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeeDoopApp.swift; sourceTree = "<group>"; };
 		A2000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A2000003 /* AssetType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetType.swift; sourceTree = "<group>"; };
 		A2000004 /* DuplicateGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateGroup.swift; sourceTree = "<group>"; };
@@ -43,6 +49,9 @@
 		A2000011 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000013 /* FileDuplicateGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileDuplicateGroup.swift; sourceTree = "<group>"; };
+		A2000024 /* DeletedItemsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeletedItemsStore.swift; sourceTree = "<group>"; };
+		A2000027 /* ContactDuplicateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactDuplicateService.swift; sourceTree = "<group>"; };
+		A2000028 /* ContactDuplicateGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactDuplicateGroup.swift; sourceTree = "<group>"; };
 		A2000014 /* DocumentDuplicateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentDuplicateService.swift; sourceTree = "<group>"; };
 		A2000015 /* DocumentPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentPickerView.swift; sourceTree = "<group>"; };
 		A2000016 /* DocumentsFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentsFlowView.swift; sourceTree = "<group>"; };
@@ -50,8 +59,9 @@
 		A2000018 /* AppHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppHeaderView.swift; sourceTree = "<group>"; };
 		A2000019 /* UIHostingController+FullScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIHostingController+FullScreen.swift"; sourceTree = "<group>"; };
 		A2000021 /* FullScreenHostingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullScreenHostingViewController.swift; sourceTree = "<group>"; };
-		A2000022 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A2000023 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		A2000025 /* ContactsFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsFlowView.swift; sourceTree = "<group>"; };
+		A2000026 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,7 +86,7 @@
 		A4000002 /* DeeDoop */ = {
 			isa = PBXGroup;
 			children = (
-				A2000022 /* AppDelegate.swift */,
+				A2000001 /* DeeDoopApp.swift */,
 				A2000017 /* AppURLs.swift */,
 				A2000002 /* ContentView.swift */,
 				A4000003 /* Models */,
@@ -95,6 +105,8 @@
 				A2000003 /* AssetType.swift */,
 				A2000004 /* DuplicateGroup.swift */,
 				A2000013 /* FileDuplicateGroup.swift */,
+				A2000024 /* DeletedItemsStore.swift */,
+				A2000028 /* ContactDuplicateGroup.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -104,6 +116,7 @@
 			children = (
 				A2000005 /* PhotoLibraryService.swift */,
 				A2000014 /* DocumentDuplicateService.swift */,
+				A2000027 /* ContactDuplicateService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -121,6 +134,8 @@
 				A2000010 /* AssetThumbnailView.swift */,
 				A2000015 /* DocumentPickerView.swift */,
 				A2000016 /* DocumentsFlowView.swift */,
+				A2000025 /* ContactsFlowView.swift */,
+				A2000026 /* HistoryView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -203,7 +218,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000022 /* AppDelegate.swift in Sources */,
+				A1000001 /* DeeDoopApp.swift in Sources */,
 				A1000002 /* ContentView.swift in Sources */,
 				A1000003 /* AssetType.swift in Sources */,
 				A1000004 /* DuplicateGroup.swift in Sources */,
@@ -221,6 +236,11 @@
 				A1000018 /* AppHeaderView.swift in Sources */,
 				A1000019 /* UIHostingController+FullScreen.swift in Sources */,
 				A1000021 /* FullScreenHostingViewController.swift in Sources */,
+				A1000024 /* DeletedItemsStore.swift in Sources */,
+				A1000025 /* ContactsFlowView.swift in Sources */,
+				A1000026 /* HistoryView.swift in Sources */,
+				A1000027 /* ContactDuplicateService.swift in Sources */,
+				A1000028 /* ContactDuplicateGroup.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

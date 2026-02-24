@@ -44,7 +44,11 @@ struct ContentView: View {
                                         AssetTypeRowLabel(assetType: type, isSelected: false)
                                     }
                                 case .contacts:
-                                    EmptyView()
+                                    NavigationLink {
+                                        ContactsFlowView()
+                                    } label: {
+                                        AssetTypeRowLabel(assetType: type, isSelected: false)
+                                    }
                                 }
                             }
                             .buttonStyle(.plain)
@@ -53,6 +57,43 @@ struct ContentView: View {
                                 .opacity(0.7)
                         }
                     }
+                }
+                .padding(.horizontal)
+
+                // History / Restore
+                NavigationLink {
+                    HistoryView()
+                } label: {
+                    HStack(spacing: 16) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.title2)
+                            .foregroundStyle(.blue)
+                            .frame(width: 44, height: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.blue.opacity(0.15))
+                            )
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("History & Restore")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text("See items DeeDoop deleted.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Color.gray.opacity(0.08))
+                    )
                 }
                 .padding(.horizontal)
                 
