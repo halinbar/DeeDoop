@@ -20,7 +20,11 @@ final class FullScreenHostingViewController: UIViewController {
     private let hosting: UIHostingController<RootSwiftUIView>
 
     init() {
-        hosting = UIHostingController(rootView: RootSwiftUIView())
+        let h = UIHostingController(rootView: RootSwiftUIView())
+        if #available(iOS 16.4, *) {
+            h.safeAreaRegions = []
+        }
+        hosting = h
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -35,6 +39,9 @@ final class FullScreenHostingViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        if #available(iOS 16.4, *) { } else {
+            makeViewIgnoreSafeArea(hosting.view)
+        }
         addChild(hosting)
         hosting.view.translatesAutoresizingMaskIntoConstraints = false
         hosting.view.backgroundColor = .clear
@@ -66,13 +73,4 @@ private struct RootSwiftUIView: View {
             }
         }
     }
-}
-
-/// SwiftUI wrapper so we can use FullScreenHostingViewController as the WindowGroup root.
-struct FullScreenHostingView: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> FullScreenHostingViewController {
-        FullScreenHostingViewController()
-    }
-
-    func updateUIViewController(_ uiViewController: FullScreenHostingViewController, context: Context) {}
 }

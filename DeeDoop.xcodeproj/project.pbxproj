@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A1000001 /* DeeDoopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001 /* DeeDoopApp.swift */; };
 		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002 /* ContentView.swift */; };
 		A1000003 /* AssetType.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* AssetType.swift */; };
 		A1000004 /* DuplicateGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004 /* DuplicateGroup.swift */; };
@@ -25,13 +24,13 @@
 		A1000017 /* AppURLs.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000017 /* AppURLs.swift */; };
 		A1000018 /* AppHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000018 /* AppHeaderView.swift */; };
 		A1000019 /* UIHostingController+FullScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000019 /* UIHostingController+FullScreen.swift */; };
-		A1000020 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000020 /* SceneDelegate.swift */; };
 		A1000021 /* FullScreenHostingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000021 /* FullScreenHostingViewController.swift */; };
+		A1000022 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000022 /* AppDelegate.swift */; };
+		A1000023 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A2000023 /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A2000000 /* DeeDoop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DeeDoop.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A2000001 /* DeeDoopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeeDoopApp.swift; sourceTree = "<group>"; };
 		A2000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A2000003 /* AssetType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetType.swift; sourceTree = "<group>"; };
 		A2000004 /* DuplicateGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateGroup.swift; sourceTree = "<group>"; };
@@ -50,8 +49,9 @@
 		A2000017 /* AppURLs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppURLs.swift; sourceTree = "<group>"; };
 		A2000018 /* AppHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppHeaderView.swift; sourceTree = "<group>"; };
 		A2000019 /* UIHostingController+FullScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIHostingController+FullScreen.swift"; sourceTree = "<group>"; };
-		A2000020 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		A2000021 /* FullScreenHostingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullScreenHostingViewController.swift; sourceTree = "<group>"; };
+		A2000022 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A2000023 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,14 +76,14 @@
 		A4000002 /* DeeDoop */ = {
 			isa = PBXGroup;
 			children = (
-				A2000001 /* DeeDoopApp.swift */,
-				A2000020 /* SceneDelegate.swift */,
+				A2000022 /* AppDelegate.swift */,
 				A2000017 /* AppURLs.swift */,
 				A2000002 /* ContentView.swift */,
 				A4000003 /* Models */,
 				A4000004 /* Services */,
 				A4000005 /* Views */,
 				A2000011 /* Assets.xcassets */,
+				A2000023 /* LaunchScreen.storyboard */,
 				A2000012 /* Info.plist */,
 			);
 			path = DeeDoop;
@@ -192,6 +192,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000011 /* Assets.xcassets in Resources */,
+				A1000023 /* LaunchScreen.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -202,7 +203,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000001 /* DeeDoopApp.swift in Sources */,
+				A1000022 /* AppDelegate.swift in Sources */,
 				A1000002 /* ContentView.swift in Sources */,
 				A1000003 /* AssetType.swift in Sources */,
 				A1000004 /* DuplicateGroup.swift in Sources */,
@@ -219,7 +220,6 @@
 				A1000017 /* AppURLs.swift in Sources */,
 				A1000018 /* AppHeaderView.swift in Sources */,
 				A1000019 /* UIHostingController+FullScreen.swift in Sources */,
-				A1000020 /* SceneDelegate.swift in Sources */,
 				A1000021 /* FullScreenHostingViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
