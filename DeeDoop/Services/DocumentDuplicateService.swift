@@ -70,7 +70,12 @@ final class DocumentDuplicateService: ObservableObject {
             return
         }
         
-        for case let fileURL as URL in enumerator {
+        // Collect URLs synchronously to avoid the async-context iterator warning.
+        var fileURLs: [URL] = []
+        while let obj = enumerator.nextObject() {
+            if let url = obj as? URL { fileURLs.append(url) }
+        }
+        for fileURL in fileURLs {
             var isDir: ObjCBool = false
             guard fileManager.fileExists(atPath: fileURL.path, isDirectory: &isDir), !isDir.boolValue else { continue }
             

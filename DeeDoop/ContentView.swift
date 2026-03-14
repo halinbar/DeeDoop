@@ -7,109 +7,211 @@ import SwiftUI
 
 struct ContentView: View {
     private static let spacerMinLength: CGFloat = 24
+    @State private var showDeduplicateMenu = false
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Color(.systemBackground).ignoresSafeArea(edges: .all)
                 VStack(spacing: 0) {
-                Spacer(minLength: Self.spacerMinLength)
+                    Spacer(minLength: Self.spacerMinLength)
 
-                AppHeaderView()
+                    AppHeaderView()
 
-                Spacer(minLength: Self.spacerMinLength)
-                
-                // Asset type selection
-                VStack(spacing: 12) {
-                    ForEach(AssetType.allCases) { type in
-                        if type.isAvailable {
-                            Group {
-                                switch type {
-                                case .photos:
-                                    NavigationLink {
-                                        PhotosFlowView(mediaFilter: .photosOnly)
-                                    } label: {
-                                        AssetTypeRowLabel(assetType: type, isSelected: false)
-                                    }
-                                case .videos:
-                                    NavigationLink {
-                                        PhotosFlowView(mediaFilter: .videosOnly)
-                                    } label: {
-                                        AssetTypeRowLabel(assetType: type, isSelected: false)
-                                    }
-                                case .files:
-                                    NavigationLink {
-                                        DocumentsFlowView()
-                                    } label: {
-                                        AssetTypeRowLabel(assetType: type, isSelected: false)
-                                    }
-                                case .contacts:
-                                    NavigationLink {
-                                        ContactsFlowView()
-                                    } label: {
-                                        AssetTypeRowLabel(assetType: type, isSelected: false)
-                                    }
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            AssetTypeRowLabel(assetType: type, isSelected: false)
-                                .opacity(0.7)
-                        }
-                    }
-                }
-                .padding(.horizontal)
+                    Spacer(minLength: Self.spacerMinLength)
 
-                // History / Restore
-                NavigationLink {
-                    HistoryView()
-                } label: {
-                    HStack(spacing: 16) {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.title2)
-                            .foregroundStyle(.blue)
-                            .frame(width: 44, height: 44)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.blue.opacity(0.15))
+                    VStack(spacing: 12) {
+                        // Deduplicate
+                        Button { showDeduplicateMenu = true } label: {
+                            HomeRowLabel(
+                                icon: "rectangle.on.rectangle.slash",
+                                color: .purple,
+                                title: "Deduplicate",
+                                subtitle: "Find and remove duplicate photos, videos, files & contacts."
                             )
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("History & Restore")
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                            Text("See items DeeDoop deleted.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
                         }
+                        .buttonStyle(.plain)
 
-                        Spacer()
+                        // Create Album
+                        NavigationLink {
+                            AlbumCreationFlowView()
+                        } label: {
+                            HomeRowLabel(
+                                icon: "photo.stack",
+                                color: .orange,
+                                title: "Create Album",
+                                subtitle: "Review, curate, and build a photo album."
+                            )
+                        }
+                        .buttonStyle(.plain)
 
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                        // History / Restore
+                        NavigationLink {
+                            HistoryView()
+                        } label: {
+                            HomeRowLabel(
+                                icon: "clock.arrow.circlepath",
+                                color: .blue,
+                                title: "History & Restore",
+                                subtitle: "See items DeeDoop deleted."
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.gray.opacity(0.08))
-                    )
-                }
-                .padding(.horizontal)
-                
-                Spacer(minLength: 24)
-                
-                // Use bottom space so it's not black/unused
-                Text("Photos · Videos · Files")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .padding(.bottom, 32)
+                    .padding(.horizontal)
+
+                    Spacer(minLength: 24)
+
+                    Text("Photos · Videos · Files · Contacts")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .padding(.bottom, 32)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .ignoresSafeArea(edges: .all)
             .toolbarBackground(Color(.systemBackground), for: .navigationBar)
+            .sheet(isPresented: $showDeduplicateMenu) {
+                DeduplicateMenuSheet()
+            }
         }
+    }
+}
+
+// MARK: - Shared row label
+
+private struct HomeRowLabel: View {
+    let icon: String
+    let color: Color
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(color)
+                .frame(width: 44, height: 44)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(color.opacity(0.15))
+                )
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.gray.opacity(0.08))
+        )
+    }
+}
+
+// MARK: - Deduplicate menu sheet
+
+private struct DeduplicateMenuSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 14) {
+                    dedupeRow(
+                        icon: "photo.on.rectangle.angled",
+                        color: .orange,
+                        title: "Photos",
+                        subtitle: "Scan for duplicate or similar photos."
+                    ) {
+                        PhotosFlowView(mediaFilter: .photosOnly)
+                    }
+                    dedupeRow(
+                        icon: "video.badge.plus",
+                        color: .pink,
+                        title: "Videos",
+                        subtitle: "Find and clean up duplicate videos."
+                    ) {
+                        PhotosFlowView(mediaFilter: .videosOnly)
+                    }
+                    dedupeRow(
+                        icon: "doc.on.doc",
+                        color: .teal,
+                        title: "Files",
+                        subtitle: "Detect duplicate documents and files."
+                    ) {
+                        DocumentsFlowView()
+                    }
+                    dedupeRow(
+                        icon: "person.2.crop.square.stack",
+                        color: .indigo,
+                        title: "Contacts",
+                        subtitle: "Merge duplicate contacts."
+                    ) {
+                        ContactsFlowView()
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+            }
+            .navigationTitle("Deduplicate")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    @ViewBuilder
+    private func dedupeRow<Destination: View>(
+        icon: String,
+        color: Color,
+        title: String,
+        subtitle: String,
+        @ViewBuilder destination: () -> Destination
+    ) -> some View {
+        NavigationLink(destination: destination()) {
+            HStack(spacing: 16) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundStyle(color)
+                    .frame(width: 50, height: 50)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(color.opacity(0.15))
+                    )
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.gray.opacity(0.07))
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

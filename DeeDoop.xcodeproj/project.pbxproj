@@ -32,6 +32,8 @@
 		A1000026 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000026 /* HistoryView.swift */; };
 		A1000027 /* ContactDuplicateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000027 /* ContactDuplicateService.swift */; };
 		A1000028 /* ContactDuplicateGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000028 /* ContactDuplicateGroup.swift */; };
+		A1000029 /* AlbumCreationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000029 /* AlbumCreationSession.swift */; };
+		A1000030 /* AlbumCreationFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000030 /* AlbumCreationFlowView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,6 +64,8 @@
 		A2000023 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		A2000025 /* ContactsFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsFlowView.swift; sourceTree = "<group>"; };
 		A2000026 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		A2000029 /* AlbumCreationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumCreationSession.swift; sourceTree = "<group>"; };
+		A2000030 /* AlbumCreationFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumCreationFlowView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -107,6 +111,7 @@
 				A2000013 /* FileDuplicateGroup.swift */,
 				A2000024 /* DeletedItemsStore.swift */,
 				A2000028 /* ContactDuplicateGroup.swift */,
+				A2000029 /* AlbumCreationSession.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -136,6 +141,7 @@
 				A2000016 /* DocumentsFlowView.swift */,
 				A2000025 /* ContactsFlowView.swift */,
 				A2000026 /* HistoryView.swift */,
+				A2000030 /* AlbumCreationFlowView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -241,6 +247,8 @@
 				A1000026 /* HistoryView.swift in Sources */,
 				A1000027 /* ContactDuplicateService.swift in Sources */,
 				A1000028 /* ContactDuplicateGroup.swift in Sources */,
+				A1000029 /* AlbumCreationSession.swift in Sources */,
+				A1000030 /* AlbumCreationFlowView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

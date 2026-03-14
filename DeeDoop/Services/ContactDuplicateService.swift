@@ -46,6 +46,8 @@ final class ContactDuplicateService: ObservableObject {
             authorizationStatus = .denied
         case .restricted:
             authorizationStatus = .restricted
+        case .limited:
+            authorizationStatus = .authorized
         @unknown default:
             authorizationStatus = .notDetermined
         }
@@ -179,7 +181,7 @@ final class ContactDuplicateService: ObservableObject {
         for node in nodes {
             let idx = node.index
             if visited.contains(idx) { continue }
-            guard let neighbors = adjacency[idx] else { continue } // not in any duplicate edge
+            guard adjacency[idx] != nil else { continue } // not in any duplicate edge
 
             var stack: [Int] = [idx]
             var component = Set<Int>()
@@ -201,8 +203,9 @@ final class ContactDuplicateService: ObservableObject {
             }
         }
 
+        let finalGroups = groups.sorted { $0.count > $1.count }
         await MainActor.run {
-            duplicateGroups = groups.sorted { $0.count > $1.count }
+            duplicateGroups = finalGroups
             isScanning = false
             scanProgress = 1
         }

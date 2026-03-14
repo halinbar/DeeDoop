@@ -36,6 +36,8 @@ final class PhotoLibraryService: ObservableObject {
     @Published private(set) var videoDuplicateGroups: [DuplicateGroup] = []
     @Published private(set) var photoBurstGroups: [DuplicateGroup] = []
     @Published private(set) var videosBySizeItems: [VideoBySizeItem] = []
+    /// All photos (or videos) that were fetched in the last scan, in creation-date order.
+    @Published private(set) var allScannedPhotos: [PHAsset] = []
     @Published private(set) var scanError: String?
     
     /// All duplicate groups (photos + videos) for convenience.
@@ -82,6 +84,7 @@ final class PhotoLibraryService: ObservableObject {
             videoDuplicateGroups = []
             photoBurstGroups = []
             videosBySizeItems = []
+            allScannedPhotos = []
         }
         
         let predicate = NSPredicate(
@@ -100,6 +103,7 @@ final class PhotoLibraryService: ObservableObject {
         var videoGroups: [DuplicateGroup] = []
         var burstGroups: [DuplicateGroup] = []
         var videoSizeItems: [VideoBySizeItem] = []
+        var scannedPhotos: [PHAsset] = []
         
         if mediaFilter == .photosOnly {
             let imageResult = PHAsset.fetchAssets(with: .image, options: fetchOptions)
@@ -122,6 +126,7 @@ final class PhotoLibraryService: ObservableObject {
                 let filename = Self.getOriginalFilename(for: asset) ?? ""
                 let signature = "photo_\(fileSize)_\(dateString)_\(w)_\(h)_\(filename)"
                 photoSignatureToAssets[signature, default: []].append(asset)
+                scannedPhotos.append(asset)
 
                 // Build burst clusters based on temporal proximity.
                 if let date = asset.creationDate {
@@ -235,11 +240,18 @@ final class PhotoLibraryService: ObservableObject {
             videoSizeItems.sort { $0.fileSize > $1.fileSize }
         }
         
+        // Capture locals before crossing into the MainActor to satisfy Swift concurrency rules.
+        let finalPhotoGroups = photoGroups
+        let finalVideoGroups = videoGroups
+        let finalBurstGroups = burstGroups
+        let finalVideoSizeItems = videoSizeItems
+        let finalScannedPhotos = scannedPhotos
         await MainActor.run {
-            photoDuplicateGroups = photoGroups
-            videoDuplicateGroups = videoGroups
-            photoBurstGroups = burstGroups
-            videosBySizeItems = videoSizeItems
+            photoDuplicateGroups = finalPhotoGroups
+            videoDuplicateGroups = finalVideoGroups
+            photoBurstGroups = finalBurstGroups
+            videosBySizeItems = finalVideoSizeItems
+            allScannedPhotos = finalScannedPhotos
             isScanning = false
             scanProgress = 1
         }
