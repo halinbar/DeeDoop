@@ -13,6 +13,7 @@ struct AlbumCreationSession: Codable, Identifiable, Hashable {
     var startDate: Date?
     var endDate: Date?
     var state: State
+    var isAlbumMode: Bool
 
     // Swipe phase
     var swipePhotoIDs: [String]
@@ -35,38 +36,110 @@ struct AlbumCreationSession: Codable, Identifiable, Hashable {
         case completed
     }
 
+    // MARK: Coding — isAlbumMode defaults to true for sessions saved before this field existed
+
+    enum CodingKeys: String, CodingKey {
+        case id, albumName, startDate, endDate, state, isAlbumMode
+        case swipePhotoIDs, currentSwipeIndex
+        case approvedPhotoIDs, skippedPhotoIDs, toDeletePhotoIDs
+        case createdAlbumIdentifier, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id                    = try c.decode(UUID.self,    forKey: .id)
+        albumName             = try c.decode(String.self,  forKey: .albumName)
+        startDate             = try c.decodeIfPresent(Date.self,   forKey: .startDate)
+        endDate               = try c.decodeIfPresent(Date.self,   forKey: .endDate)
+        state                 = try c.decode(State.self,   forKey: .state)
+        isAlbumMode           = try c.decodeIfPresent(Bool.self,   forKey: .isAlbumMode) ?? true
+        swipePhotoIDs         = try c.decode([String].self, forKey: .swipePhotoIDs)
+        currentSwipeIndex     = try c.decode(Int.self,     forKey: .currentSwipeIndex)
+        approvedPhotoIDs      = try c.decode([String].self, forKey: .approvedPhotoIDs)
+        skippedPhotoIDs       = try c.decode([String].self, forKey: .skippedPhotoIDs)
+        toDeletePhotoIDs      = try c.decode([String].self, forKey: .toDeletePhotoIDs)
+        createdAlbumIdentifier = try c.decodeIfPresent(String.self, forKey: .createdAlbumIdentifier)
+        createdAt             = try c.decode(Date.self,    forKey: .createdAt)
+    }
+
+    init(id: UUID, albumName: String, startDate: Date?, endDate: Date?,
+         state: State, isAlbumMode: Bool,
+         swipePhotoIDs: [String], currentSwipeIndex: Int,
+         approvedPhotoIDs: [String], skippedPhotoIDs: [String], toDeletePhotoIDs: [String],
+         createdAlbumIdentifier: String?, createdAt: Date) {
+        self.id = id
+        self.albumName = albumName
+        self.startDate = startDate
+        self.endDate = endDate
+        self.state = state
+        self.isAlbumMode = isAlbumMode
+        self.swipePhotoIDs = swipePhotoIDs
+        self.currentSwipeIndex = currentSwipeIndex
+        self.approvedPhotoIDs = approvedPhotoIDs
+        self.skippedPhotoIDs = skippedPhotoIDs
+        self.toDeletePhotoIDs = toDeletePhotoIDs
+        self.createdAlbumIdentifier = createdAlbumIdentifier
+        self.createdAt = createdAt
+    }
+
+    // MARK: Factories
+
     static func new() -> AlbumCreationSession {
         AlbumCreationSession(
-            id: UUID(),
-            albumName: "",
-            startDate: nil,
-            endDate: nil,
-            state: .naming,
-            swipePhotoIDs: [],
-            currentSwipeIndex: 0,
-            approvedPhotoIDs: [],
-            skippedPhotoIDs: [],
-            toDeletePhotoIDs: [],
-            createdAlbumIdentifier: nil,
-            createdAt: Date()
+            id: UUID(), albumName: "", startDate: nil, endDate: nil,
+            state: .naming, isAlbumMode: true,
+            swipePhotoIDs: [], currentSwipeIndex: 0,
+            approvedPhotoIDs: [], skippedPhotoIDs: [], toDeletePhotoIDs: [],
+            createdAlbumIdentifier: nil, createdAt: Date()
         )
     }
 
-    var displayName: String { albumName.isEmpty ? "Untitled Album" : albumName }
+    static func newSort() -> AlbumCreationSession {
+        AlbumCreationSession(
+            id: UUID(), albumName: "", startDate: nil, endDate: nil,
+            state: .naming, isAlbumMode: false,
+            swipePhotoIDs: [], currentSwipeIndex: 0,
+            approvedPhotoIDs: [], skippedPhotoIDs: [], toDeletePhotoIDs: [],
+            createdAlbumIdentifier: nil, createdAt: Date()
+        )
+    }
+
+    // MARK: Display helpers
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
+
+    var displayName: String {
+        if isAlbumMode {
+            return albumName.isEmpty ? "Untitled Album" : albumName
+        } else {
+            if let s = startDate, let e = endDate {
+                return "\(Self.dateFormatter.string(from: s)) – \(Self.dateFormatter.string(from: e))"
+            }
+            return "New Sort"
+        }
+    }
 
     var progressSummary: String {
         switch state {
-        case .naming: return "Setting up"
-        case .selectingStartPhoto: return "Choosing start photo"
-        case .selectingEndPhoto: return "Choosing end photo"
-        case .scanning: return "Scanning…"
-        case .deduplicating: return "Removing duplicates"
-        case .burstFiltering: return "Filtering bursts"
+        case .naming, .selectingStartPhoto, .selectingEndPhoto:
+            return "Setting up"
+        case .scanning:
+            return "Scanning…"
+        case .deduplicating:
+            return isAlbumMode ? "Removing duplicates" : "Removing duplicates"
+        case .burstFiltering:
+            return "Filtering bursts"
         case .swiping:
             let done = currentSwipeIndex
             let total = swipePhotoIDs.count
             return "\(done)/\(total) reviewed"
-        case .completed: return "Completed"
+        case .completed:
+            return "Completed"
         }
     }
 }
@@ -103,7 +176,14 @@ final class AlbumCreationStore: ObservableObject {
         guard let data = try? Data(contentsOf: fileURL),
               let decoded = try? JSONDecoder().decode([AlbumCreationSession].self, from: data)
         else { return }
-        sessions = decoded.filter { !$0.albumName.isEmpty }
+        sessions = decoded.filter { session in
+            if session.isAlbumMode {
+                return !session.albumName.isEmpty
+            } else {
+                // Sort session: keep only if setup was completed (dates exist)
+                return session.startDate != nil && session.endDate != nil
+            }
+        }
         save()
     }
 

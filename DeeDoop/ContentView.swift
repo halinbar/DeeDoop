@@ -32,6 +32,19 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
 
+                        // Sort Photos
+                        NavigationLink {
+                            SortPhotosFlowView()
+                        } label: {
+                            HomeRowLabel(
+                                icon: "arrow.left.arrow.right.square",
+                                color: .indigo,
+                                title: "Sort Photos",
+                                subtitle: "Review a date range with swipe gestures — keep, skip, or delete."
+                            )
+                        }
+                        .buttonStyle(.plain)
+
                         // Create Album
                         NavigationLink {
                             AlbumCreationFlowView()

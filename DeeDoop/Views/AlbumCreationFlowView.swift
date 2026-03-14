@@ -11,14 +11,17 @@ import SwiftUI
 
 struct AlbumCreationFlowView: View {
     @ObservedObject private var store = AlbumCreationStore.shared
-    @State private var showingNewSession = false
     @State private var activeSession: AlbumCreationSession?
+
+    private var albumSessions: [AlbumCreationSession] {
+        store.sessions.filter { $0.isAlbumMode }
+    }
 
     var body: some View {
         ZStack {
             Color(.systemBackground).ignoresSafeArea(edges: .all)
 
-            if store.sessions.isEmpty && activeSession == nil {
+            if albumSessions.isEmpty && activeSession == nil {
                 emptyState
             } else {
                 sessionList
@@ -40,7 +43,6 @@ struct AlbumCreationFlowView: View {
         .navigationDestination(isPresented: Binding(
             get: { activeSession != nil },
             set: { if !$0 {
-                // Discard sessions that never received a name
                 if let s = activeSession, s.albumName.isEmpty {
                     store.delete(s)
                 }
@@ -85,38 +87,16 @@ struct AlbumCreationFlowView: View {
 
     private var sessionList: some View {
         List {
-            ForEach(store.sessions) { session in
+            ForEach(albumSessions) { session in
                 Button {
                     activeSession = session
                 } label: {
-                    HStack(spacing: 14) {
-                        Image(systemName: session.state == .completed ? "checkmark.circle.fill" : "photo.stack")
-                            .font(.title2)
-                            .foregroundStyle(session.state == .completed ? .green : .orange)
-                            .frame(width: 44, height: 44)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill((session.state == .completed ? Color.green : Color.orange).opacity(0.12))
-                            )
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(session.displayName)
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                            Text(session.progressSummary)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.vertical, 4)
+                    SessionRowLabel(session: session)
                 }
                 .buttonStyle(.plain)
             }
             .onDelete { indexSet in
-                indexSet.forEach { store.delete(store.sessions[$0]) }
+                indexSet.forEach { store.delete(albumSessions[$0]) }
             }
         }
         .scrollContentBackground(.hidden)
@@ -158,9 +138,10 @@ struct AlbumSessionCoordinatorView: View {
     private func ensureAlbumExists() async {
         let setupStates: [AlbumCreationSession.State] = [.naming, .selectingStartPhoto, .selectingEndPhoto]
         guard var s = session,
-              !setupStates.contains(s.state),         // setup not yet complete
+              s.isAlbumMode,                           // no album for sort sessions
+              !setupStates.contains(s.state),          // setup not yet complete
               !s.albumName.isEmpty,
-              s.createdAlbumIdentifier == nil          // album not yet created
+              s.createdAlbumIdentifier == nil           // album not yet created
         else { return }
 
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
@@ -267,29 +248,33 @@ private struct AlbumSetupStep: View {
         var id: String { rawValue }
     }
 
+    private var isAlbumMode: Bool { session.isAlbumMode }
+
     private var canContinue: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty &&
-        startDate != nil && endDate != nil
+        let nameOK = !isAlbumMode || !name.trimmingCharacters(in: .whitespaces).isEmpty
+        return nameOK && startDate != nil && endDate != nil
     }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 32) {
-                // Album name
-                VStack(alignment: .leading, spacing: 10) {
-                    Label("Album name", systemImage: "photo.stack")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    TextField("e.g. Summer 2024", text: $name)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.title3)
-                        .focused($isNameFocused)
-                        .submitLabel(.done)
-                        .disabled(isWorking)
+                // Album name — only shown in album mode
+                if isAlbumMode {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Album name", systemImage: "photo.stack")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        TextField("e.g. Summer 2024", text: $name)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.title3)
+                            .focused($isNameFocused)
+                            .submitLabel(.done)
+                            .disabled(isWorking)
+                    }
                 }
 
-                // Photo range — locked until the album has a name
-                let hasName = !name.trimmingCharacters(in: .whitespaces).isEmpty
+                // Photo range — in album mode, locked until the album has a name
+                let hasName = !isAlbumMode || !name.trimmingCharacters(in: .whitespaces).isEmpty
                 VStack(alignment: .leading, spacing: 10) {
                     Label("Photo range", systemImage: "calendar")
                         .font(.subheadline.weight(.semibold))
@@ -322,7 +307,7 @@ private struct AlbumSetupStep: View {
 
                 // Continue button
                 if isWorking {
-                    ProgressView("Creating album…").tint(.orange)
+                    ProgressView(isAlbumMode ? "Creating album…" : "Setting up…").tint(.orange)
                 } else {
                     Button { Task { await advance() } } label: {
                         Text("Continue")
@@ -338,7 +323,7 @@ private struct AlbumSetupStep: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 28)
         }
-        .navigationTitle("New Album")
+        .navigationTitle(isAlbumMode ? "New Album" : "Sort Photos")
         .onAppear { populate() }
         .sheet(item: $pickerTarget) { target in
             SinglePhotoPickerView { id, date in
@@ -445,25 +430,30 @@ private struct AlbumSetupStep: View {
 
     @MainActor
     private func advance() async {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, let s1 = startDate, let e1 = endDate else { return }
+        guard let s1 = startDate, let e1 = endDate else { return }
+        if isAlbumMode {
+            guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        }
         isWorking = true
 
         var s = session
-        s.albumName = trimmed
         s.startDate = min(s1, e1)
         s.endDate   = max(s1, e1)
 
-        // Create the album in Photos so it appears in the gallery immediately.
-        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        if status == .authorized || status == .limited {
-            var placeholderID: String?
-            try? await PHPhotoLibrary.shared().performChanges {
-                let req = PHAssetCollectionChangeRequest
-                    .creationRequestForAssetCollection(withTitle: trimmed)
-                placeholderID = req.placeholderForCreatedAssetCollection.localIdentifier
+        if isAlbumMode {
+            let trimmed = name.trimmingCharacters(in: .whitespaces)
+            s.albumName = trimmed
+            // Create the album in Photos so it appears in the gallery immediately.
+            let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            if status == .authorized || status == .limited {
+                var placeholderID: String?
+                try? await PHPhotoLibrary.shared().performChanges {
+                    let req = PHAssetCollectionChangeRequest
+                        .creationRequestForAssetCollection(withTitle: trimmed)
+                    placeholderID = req.placeholderForCreatedAssetCollection.localIdentifier
+                }
+                s.createdAlbumIdentifier = placeholderID
             }
-            s.createdAlbumIdentifier = placeholderID
         }
 
         s.state = .scanning
@@ -652,7 +642,8 @@ struct AlbumSwipeStep: View {
                 SwipeCardView(
                     asset: asset,
                     burstSiblings: burstSiblings,
-                    existingDecision: currentDecision
+                    existingDecision: currentDecision,
+                    isAlbumMode: localSession.isAlbumMode
                 ) { action in
                     recordSwipe(action: action)
                 }
@@ -696,11 +687,13 @@ struct AlbumSwipeStep: View {
         .navigationDestination(isPresented: $showSkippedReview) {
             SkippedPhotosReviewView(
                 reviewIDs: skippedAndUntaggedIDs,
+                isAlbumMode: localSession.isAlbumMode,
                 onDecision: { id, action in applyDecision(id: id, action: action) }
             )
         }
         .onAppear { loadCurrent() }
-        .alert("Album creation failed", isPresented: .constant(albumError != nil)) {
+        .alert(localSession.isAlbumMode ? "Album creation failed" : "Finalisation failed",
+               isPresented: .constant(albumError != nil)) {
             Button("OK") { albumError = nil }
         } message: {
             Text(albumError ?? "")
@@ -713,7 +706,8 @@ struct AlbumSwipeStep: View {
     }
 
     private var doneView: some View {
-        VStack(spacing: 20) {
+        let isAlbum = localSession.isAlbumMode
+        return VStack(spacing: 20) {
             Spacer()
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 64))
@@ -722,9 +716,9 @@ struct AlbumSwipeStep: View {
                 .font(.title2.weight(.semibold))
             VStack(spacing: 8) {
                 summaryRow(icon: "heart.fill", color: .green,
-                           text: "\(localSession.approvedPhotoIDs.count) added to album")
+                           text: "\(localSession.approvedPhotoIDs.count) \(isAlbum ? "added to album" : "kept")")
                 summaryRow(icon: "arrow.down.circle.fill", color: .blue,
-                           text: "\(localSession.skippedPhotoIDs.count) kept but not in album")
+                           text: "\(localSession.skippedPhotoIDs.count) \(isAlbum ? "kept but not in album" : "skipped")")
                 summaryRow(icon: "trash.fill", color: .red,
                            text: "\(localSession.toDeletePhotoIDs.count) will be deleted")
             }
@@ -744,18 +738,23 @@ struct AlbumSwipeStep: View {
                 }
 
                 if isCreatingAlbum {
-                    ProgressView("Creating album…")
+                    ProgressView(isAlbum ? "Creating album…" : "Finishing…")
                         .tint(.orange)
                 } else {
                     Button {
                         Task { await finalizeAlbum() }
                     } label: {
-                        Label("Create \"\(localSession.albumName)\" album", systemImage: "plus.rectangle.on.folder")
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.orange)
-                            .foregroundColor(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        Label(
+                            isAlbum
+                                ? "Create \"\(localSession.albumName)\" album"
+                                : "Finish sorting",
+                            systemImage: isAlbum ? "plus.rectangle.on.folder" : "checkmark.circle"
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.orange)
+                        .foregroundColor(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
                     }
                     .padding(.horizontal)
                 }
@@ -933,54 +932,59 @@ struct AlbumSwipeStep: View {
                 DeletedItemsStore.shared.addMediaItems(deletedItems)
             }
 
-            // 2. Resolve the album — prefer the one already created at naming time.
-            let albumID: String
-            if let existingID = localSession.createdAlbumIdentifier,
-               PHAssetCollection.fetchAssetCollections(
-                   withLocalIdentifiers: [existingID], options: nil).firstObject != nil {
-                // Album was created when the user named it — reuse it.
-                albumID = existingID
-            } else {
-                // Fallback: album wasn't pre-created (e.g. auth was denied then granted later).
-                var placeholderID: String?
-                try await PHPhotoLibrary.shared().performChanges {
-                    let req = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(
-                        withTitle: localSession.albumName)
-                    placeholderID = req.placeholderForCreatedAssetCollection.localIdentifier
+            if localSession.isAlbumMode {
+                // 2. Resolve the album — prefer the one already created at naming time.
+                let albumID: String
+                if let existingID = localSession.createdAlbumIdentifier,
+                   PHAssetCollection.fetchAssetCollections(
+                       withLocalIdentifiers: [existingID], options: nil).firstObject != nil {
+                    albumID = existingID
+                } else {
+                    var placeholderID: String?
+                    try await PHPhotoLibrary.shared().performChanges {
+                        let req = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(
+                            withTitle: localSession.albumName)
+                        placeholderID = req.placeholderForCreatedAssetCollection.localIdentifier
+                    }
+                    guard let newID = placeholderID else {
+                        throw NSError(domain: "AlbumCreation", code: 1,
+                                      userInfo: [NSLocalizedDescriptionKey: "Could not create album."])
+                    }
+                    albumID = newID
                 }
-                guard let newID = placeholderID else {
-                    throw NSError(domain: "AlbumCreation", code: 1,
-                                  userInfo: [NSLocalizedDescriptionKey: "Could not create album."])
-                }
-                albumID = newID
-            }
 
-            // 3. Add any approved photos not yet in the album (safety net for photos
-            //    approved before the album existed, or if a live add failed silently).
-            let remainingToAdd = localSession.approvedPhotoIDs.filter {
-                !addedToAlbumIDs.contains($0)
-            }
-            if !remainingToAdd.isEmpty {
-                let albumResult = PHAssetCollection.fetchAssetCollections(
-                    withLocalIdentifiers: [albumID], options: nil)
-                if let album = albumResult.firstObject {
-                    let approvedResult = PHAsset.fetchAssets(
-                        withLocalIdentifiers: remainingToAdd, options: nil)
-                    var approved: [PHAsset] = []
-                    approvedResult.enumerateObjects { a, _, _ in approved.append(a) }
-                    if !approved.isEmpty {
-                        try await PHPhotoLibrary.shared().performChanges {
-                            PHAssetCollectionChangeRequest(for: album)?.addAssets(approved as NSArray)
+                // 3. Add any approved photos not yet in the album.
+                let remainingToAdd = localSession.approvedPhotoIDs.filter {
+                    !addedToAlbumIDs.contains($0)
+                }
+                if !remainingToAdd.isEmpty {
+                    let albumResult = PHAssetCollection.fetchAssetCollections(
+                        withLocalIdentifiers: [albumID], options: nil)
+                    if let album = albumResult.firstObject {
+                        let approvedResult = PHAsset.fetchAssets(
+                            withLocalIdentifiers: remainingToAdd, options: nil)
+                        var approved: [PHAsset] = []
+                        approvedResult.enumerateObjects { a, _, _ in approved.append(a) }
+                        if !approved.isEmpty {
+                            try await PHPhotoLibrary.shared().performChanges {
+                                PHAssetCollectionChangeRequest(for: album)?.addAssets(approved as NSArray)
+                            }
                         }
                     }
                 }
-            }
 
-            await MainActor.run {
-                localSession.createdAlbumIdentifier = albumID
-                localSession.state = .completed
-                onUpdate(localSession)
-                isCreatingAlbum = false
+                await MainActor.run {
+                    localSession.createdAlbumIdentifier = albumID
+                    localSession.state = .completed
+                    onUpdate(localSession)
+                    isCreatingAlbum = false
+                }
+            } else {
+                await MainActor.run {
+                    localSession.state = .completed
+                    onUpdate(localSession)
+                    isCreatingAlbum = false
+                }
             }
         } catch {
             await MainActor.run {
@@ -1004,15 +1008,18 @@ struct AlbumCompletedView: View {
     }
 
     var body: some View {
+        let isAlbum = session.isAlbumMode
         VStack(spacing: 24) {
             Spacer()
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 72))
                 .foregroundStyle(.orange)
-            Text("\"\(session.albumName)\" created!")
+            Text(isAlbum ? "\"\(session.albumName)\" created!" : "Sort complete!")
                 .font(.title.weight(.bold))
             VStack(spacing: 8) {
-                Text("\(session.approvedPhotoIDs.count) photos added to the album.")
+                Text(isAlbum
+                     ? "\(session.approvedPhotoIDs.count) photos added to the album."
+                     : "\(session.approvedPhotoIDs.count) photos kept.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Text("\(session.toDeletePhotoIDs.count) photos deleted.")
@@ -1041,7 +1048,7 @@ struct AlbumCompletedView: View {
 
             Spacer()
         }
-        .navigationTitle("Album Created")
+        .navigationTitle(isAlbum ? "Album Created" : "Sort Complete")
     }
 }
 
@@ -1049,6 +1056,7 @@ struct AlbumCompletedView: View {
 
 struct SkippedPhotosReviewView: View {
     let reviewIDs: [String]
+    var isAlbumMode: Bool = true
     /// Called whenever the user applies a new decision. When `nil`, action buttons are hidden
     /// (read-only mode, e.g. when viewing after album completion).
     var onDecision: ((String, AlbumSwipeAction) -> Void)? = nil
@@ -1117,7 +1125,7 @@ struct SkippedPhotosReviewView: View {
                                   isActive: localDecisions[asset.localIdentifier] == .skip) {
                             apply(.skip, to: asset)
                         }
-                        tagButton(label: "Add", icon: "heart.fill", color: .green,
+                        tagButton(label: isAlbumMode ? "Add" : "Keep", icon: "heart.fill", color: .green,
                                   isActive: localDecisions[asset.localIdentifier] == .approve) {
                             apply(.approve, to: asset)
                         }
@@ -1142,7 +1150,7 @@ struct SkippedPhotosReviewView: View {
     private func decisionBanner(_ decision: AlbumSwipeAction) -> some View {
         let (label, icon, color): (String, String, Color) = {
             switch decision {
-            case .approve: return ("Added to album", "heart.fill", .green)
+            case .approve: return (isAlbumMode ? "Added to album" : "Kept", "heart.fill", .green)
             case .delete:  return ("Marked for deletion", "trash.fill", .red)
             case .skip:    return ("Skipped", "arrow.down.circle.fill", .blue)
             }
@@ -1246,6 +1254,7 @@ struct SwipeCardView: View {
     let asset: PHAsset
     let burstSiblings: [PHAsset]
     let existingDecision: AlbumSwipeAction?
+    var isAlbumMode: Bool = true
     let onSwipe: (AlbumSwipeAction) -> Void
 
     @State private var dragOffset: CGSize = .zero
@@ -1293,7 +1302,7 @@ struct SwipeCardView: View {
                             Label("Skip", systemImage: "arrow.down")
                                 .foregroundStyle(.blue)
                             Spacer()
-                            Label("Add", systemImage: "heart")
+                            Label(isAlbumMode ? "Add" : "Keep", systemImage: "heart")
                                 .foregroundStyle(.green)
                         }
                         .font(.caption.weight(.semibold))
@@ -1347,7 +1356,8 @@ struct SwipeCardView: View {
 
     @ViewBuilder
     private func actionLabel(_ dir: SwipeDir) -> some View {
-        Label(dir.label, systemImage: dir.icon)
+        let label = (dir == .right && !isAlbumMode) ? "Keep" : dir.label
+        Label(label, systemImage: dir.icon)
             .font(.headline.weight(.bold))
             .foregroundStyle(dir.color)
             .padding(.horizontal, 14)
@@ -1359,7 +1369,7 @@ struct SwipeCardView: View {
     private func existingDecisionBanner(_ decision: AlbumSwipeAction) -> some View {
         let (icon, label, color): (String, String, Color) = {
             switch decision {
-            case .approve: return ("heart.fill",             "Added to album",  .green)
+            case .approve: return ("heart.fill", isAlbumMode ? "Added to album" : "Kept", .green)
             case .delete:  return ("trash.fill",             "Marked for deletion", .red)
             case .skip:    return ("arrow.down.circle.fill", "Skipped",         .blue)
             }
@@ -2071,6 +2081,138 @@ private struct FilmStripThumbnail: View {
         ) { img, _ in
             Task { @MainActor in self.image = img }
         }
+    }
+}
+
+// MARK: - Shared session row label
+
+private struct SessionRowLabel: View {
+    let session: AlbumCreationSession
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: session.state == .completed ? "checkmark.circle.fill" : iconName)
+                .font(.title2)
+                .foregroundStyle(session.state == .completed ? .green : accentColor)
+                .frame(width: 44, height: 44)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill((session.state == .completed ? Color.green : accentColor).opacity(0.12))
+                )
+            VStack(alignment: .leading, spacing: 4) {
+                Text(session.displayName)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(session.progressSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var iconName: String { session.isAlbumMode ? "photo.stack" : "arrow.left.arrow.right.square" }
+    private var accentColor: Color { session.isAlbumMode ? .orange : .indigo }
+}
+
+// MARK: - Sort Photos flow (mirrors AlbumCreationFlowView but no album)
+
+struct SortPhotosFlowView: View {
+    @ObservedObject private var store = AlbumCreationStore.shared
+    @State private var activeSession: AlbumCreationSession?
+
+    private var sortSessions: [AlbumCreationSession] {
+        store.sessions.filter { !$0.isAlbumMode }
+    }
+
+    var body: some View {
+        ZStack {
+            Color(.systemBackground).ignoresSafeArea(edges: .all)
+
+            if sortSessions.isEmpty && activeSession == nil {
+                emptyState
+            } else {
+                sessionList
+            }
+        }
+        .navigationTitle("Sort Photos")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    let s = AlbumCreationSession.newSort()
+                    store.upsert(s)
+                    activeSession = s
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
+        .navigationDestination(isPresented: Binding(
+            get: { activeSession != nil },
+            set: { if !$0 {
+                // Discard sessions that never had dates set
+                if let s = activeSession, s.startDate == nil {
+                    store.delete(s)
+                }
+                activeSession = nil
+            }}
+        )) {
+            if let session = activeSession {
+                AlbumSessionCoordinatorView(sessionID: session.id)
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "arrow.left.arrow.right.square")
+                .font(.system(size: 64))
+                .foregroundStyle(.secondary)
+            Text("No sorting sessions")
+                .font(.title2.weight(.semibold))
+            Text("Tap + to start sorting photos from a date range.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            Button {
+                let s = AlbumCreationSession.newSort()
+                store.upsert(s)
+                activeSession = s
+            } label: {
+                Label("Start sorting", systemImage: "plus.circle.fill")
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.indigo)
+                    .foregroundColor(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+            .padding(.horizontal)
+            Spacer()
+        }
+    }
+
+    private var sessionList: some View {
+        List {
+            ForEach(sortSessions) { session in
+                Button {
+                    activeSession = session
+                } label: {
+                    SessionRowLabel(session: session)
+                }
+                .buttonStyle(.plain)
+            }
+            .onDelete { indexSet in
+                indexSet.forEach { store.delete(sortSessions[$0]) }
+            }
+        }
+        .scrollContentBackground(.hidden)
     }
 }
 
