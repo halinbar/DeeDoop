@@ -3,6 +3,8 @@ In Progress
 
 
 To Do
+- add swipe up to save as a favorite
+- sync with existing albums and manage them through the app
 - add clip embedding to the app.
 --- start using it to delete utility photos
 - sync with google photos, google drive, icloud.
