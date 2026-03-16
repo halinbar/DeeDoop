@@ -12,6 +12,11 @@ import SwiftUI
 struct AlbumCreationFlowView: View {
     @ObservedObject private var store = AlbumCreationStore.shared
     @State private var activeSession: AlbumCreationSession?
+    @State private var existingAlbums: [PHAssetCollection] = []
+    @State private var photoAlbumAccessError: String?
+    @State private var showDeleteAlbumAlert = false
+    @State private var albumToDelete: PHAssetCollection?
+    @StateObject private var albumChangeObserver = AlbumLibraryObserver()
 
     private var albumSessions: [AlbumCreationSession] {
         store.sessions.filter { $0.isAlbumMode }
@@ -21,10 +26,18 @@ struct AlbumCreationFlowView: View {
         ZStack {
             Color(.systemBackground).ignoresSafeArea(edges: .all)
 
-            if albumSessions.isEmpty && activeSession == nil {
+            if existingAlbums.isEmpty && albumSessions.isEmpty && activeSession == nil {
                 emptyState
             } else {
-                sessionList
+                albumsList
+            }
+        }
+        .task {
+            await loadExistingAlbums()
+        }
+        .onReceive(albumChangeObserver.$changed) { changed in
+            if changed {
+                Task { await loadExistingAlbums() }
             }
         }
         .navigationTitle("Create Album")
@@ -85,23 +98,156 @@ struct AlbumCreationFlowView: View {
         }
     }
 
-    private var sessionList: some View {
+    private var albumsList: some View {
         List {
-            ForEach(albumSessions) { session in
-                Button {
-                    activeSession = session
-                } label: {
-                    SessionRowLabel(session: session)
+            if !existingAlbums.isEmpty {
+                Section("Existing albums") {
+                    ForEach(existingAlbums, id: \.localIdentifier) { collection in
+                        HStack {
+                            Button {
+                                // Open selected album in album-creation/swipe flow.
+                                var openSession = AlbumCreationSession.new()
+                                openSession.albumName = collection.localizedTitle ?? ""
+                                openSession.state = .swiping
+                                openSession.createdAlbumIdentifier = collection.localIdentifier
+                                openSession.selectedAlbumIdentifier = collection.localIdentifier
+                                store.upsert(openSession)
+                                activeSession = openSession
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(collection.localizedTitle ?? "Untitled")
+                                            .font(.headline)
+                                        Text(albumCountText(for: collection))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    albumToDelete = collection
+                                    showDeleteAlbumAlert = true
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
                 }
-                .buttonStyle(.plain)
             }
-            .onDelete { indexSet in
-                indexSet.forEach { store.delete(albumSessions[$0]) }
+
+            if !albumSessions.isEmpty {
+                Section("In-progress albums") {
+                    ForEach(albumSessions) { session in
+                        Button {
+                            activeSession = session
+                        } label: {
+                            SessionRowLabel(session: session)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .onDelete { indexSet in
+                        indexSet.forEach { store.delete(albumSessions[$0]) }
+                    }
+                }
+            }
+
+            if existingAlbums.isEmpty && albumSessions.isEmpty {
+                Section {
+                    Text("No albums available")
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .scrollContentBackground(.hidden)
+        .refreshable {
+            await loadExistingAlbums()
+        }
+        .alert("Delete album?", isPresented: $showDeleteAlbumAlert, presenting: albumToDelete) { collection in
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                Task { await deleteAlbum(collection) }
+            }
+        } message: { collection in
+            let count = PHAsset.fetchAssets(in: collection, options: nil).count
+            Text("Are you sure you want to delete '\(collection.localizedTitle ?? "Untitled")' with \(count) photos? This cannot be undone.")
+        }
+    }
+
+    private func loadExistingAlbums() async {
+        let currentStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        PHPhotoLibrary.shared().register(albumChangeObserver)
+        let status = (currentStatus == .authorized || currentStatus == .limited)
+            ? currentStatus
+            : await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+
+        guard status == .authorized || status == .limited else {
+            await MainActor.run {
+                existingAlbums = []
+                photoAlbumAccessError = "Photos library access denied"
+            }
+            return
+        }
+
+        var albums: [PHAssetCollection] = []
+        let options = PHFetchOptions()
+
+        let userAlbums = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: options)
+        userAlbums.enumerateObjects { collection, _, _ in albums.append(collection) }
+
+        let smartAlbums = PHAssetCollection.fetchAssetCollections(with: .smartAlbum, subtype: .any, options: options)
+        smartAlbums.enumerateObjects { collection, _, _ in albums.append(collection) }
+
+        albums.sort { ($0.localizedTitle ?? "") < ($1.localizedTitle ?? "") }
+
+        await MainActor.run {
+            existingAlbums = albums
+            photoAlbumAccessError = nil
+            albumChangeObserver.reset()
+        }
+    }
+
+    private func deleteAlbum(_ collection: PHAssetCollection) async {
+        let count = PHAsset.fetchAssets(in: collection, options: nil).count
+        guard count >= 0 else { return }
+
+        do {
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetCollectionChangeRequest.deleteAssetCollections([collection] as NSArray)
+            }
+            await loadExistingAlbums()
+        } catch {
+            // Optionally handle errors through UI state.
+            print("Failed to delete album: \(error)")
+        }
+    }
+
+    private func albumCountText(for collection: PHAssetCollection) -> String {
+        let assets = PHAsset.fetchAssets(in: collection, options: nil)
+        let count = assets.count
+        return "\(count) item\(count == 1 ? "" : "s")"
+    }
+
+}
+
+private class AlbumLibraryObserver: NSObject, ObservableObject, PHPhotoLibraryChangeObserver {
+    @Published var changed: Bool = false
+
+    func photoLibraryDidChange(_ changeInstance: PHChange) {
+        DispatchQueue.main.async {
+            self.changed = true
+        }
+    }
+
+    func reset() {
+        changed = false
     }
 }
+
 
 // MARK: - Coordinator
 
@@ -128,6 +274,10 @@ struct AlbumSessionCoordinatorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task(id: sessionID) {
             await ensureAlbumExists()
+            if var s = session, s.state == .swiping && s.swipePhotoIDs.isEmpty {
+                await prepareSwipeIDs(session: &s)
+                store.upsert(s)
+            }
         }
     }
 
@@ -203,7 +353,7 @@ struct AlbumSessionCoordinatorView: View {
                 }
             }
         case .swiping:
-            AlbumSwipeStep(session: session) { updated in
+            AlbumSwipeStep(session: session, photoService: photoService) { updated in
                 store.upsert(updated)
             }
         case .completed:
@@ -212,16 +362,26 @@ struct AlbumSessionCoordinatorView: View {
     }
 
     private func prepareSwipeIDs(session: inout AlbumCreationSession) async {
-        guard let start = session.startDate, let end = session.endDate else { return }
-        let fetchOptions = PHFetchOptions()
-        fetchOptions.predicate = NSPredicate(
-            format: "creationDate >= %@ AND creationDate <= %@",
-            start as NSDate, end as NSDate
-        )
-        fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
-        let result = PHAsset.fetchAssets(with: .image, options: fetchOptions)
         var ids: [String] = []
-        result.enumerateObjects { asset, _, _ in ids.append(asset.localIdentifier) }
+
+        if let albumID = session.selectedAlbumIdentifier {
+            let collectionResult = PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [albumID], options: nil)
+            if let collection = collectionResult.firstObject {
+                let assets = PHAsset.fetchAssets(in: collection, options: nil)
+                assets.enumerateObjects { asset, _, _ in ids.append(asset.localIdentifier) }
+            }
+        } else {
+            guard let start = session.startDate, let end = session.endDate else { return }
+            let fetchOptions = PHFetchOptions()
+            fetchOptions.predicate = NSPredicate(
+                format: "creationDate >= %@ AND creationDate <= %@",
+                start as NSDate, end as NSDate
+            )
+            fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
+            let result = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+            result.enumerateObjects { asset, _, _ in ids.append(asset.localIdentifier) }
+        }
+
         session.swipePhotoIDs = ids
         session.currentSwipeIndex = 0
         session.state = .swiping
@@ -580,6 +740,8 @@ struct AlbumBurstStep: View {
 // MARK: - Step: Tinder-style swipe
 
 struct AlbumSwipeStep: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var photoService: PhotoLibraryService
     let session: AlbumCreationSession
     let onUpdate: (AlbumCreationSession) -> Void
 
@@ -594,7 +756,8 @@ struct AlbumSwipeStep: View {
     @State private var addedToAlbumIDs: Set<String> = []
     @State private var showSkippedReview = false
 
-    init(session: AlbumCreationSession, onUpdate: @escaping (AlbumCreationSession) -> Void) {
+    init(session: AlbumCreationSession, photoService: PhotoLibraryService, onUpdate: @escaping (AlbumCreationSession) -> Void) {
+        self.photoService = photoService
         self.session = session
         self.onUpdate = onUpdate
         self._localSession = State(initialValue: session)
@@ -602,6 +765,10 @@ struct AlbumSwipeStep: View {
 
     private var remaining: Int {
         max(localSession.swipePhotoIDs.count - localSession.currentSwipeIndex, 0)
+    }
+
+    private var selectedCount: Int {
+        Set(localSession.approvedPhotoIDs + localSession.favoritedPhotoIDs).count
     }
 
     var body: some View {
@@ -616,8 +783,10 @@ struct AlbumSwipeStep: View {
                 .padding(.horizontal)
 
                 HStack {
-                    Label("\(localSession.approvedPhotoIDs.count)", systemImage: "heart.fill")
+                    Label("\(selectedCount)", systemImage: "heart.fill")
                         .foregroundStyle(.green)
+                    Label("\(localSession.favoritedPhotoIDs.count)", systemImage: "star.fill")
+                        .foregroundStyle(.pink)
                     Spacer()
                     VStack(spacing: 1) {
                         Text("\(localSession.currentSwipeIndex + 1) / \(localSession.swipePhotoIDs.count)")
@@ -691,7 +860,9 @@ struct AlbumSwipeStep: View {
                 onDecision: { id, action in applyDecision(id: id, action: action) }
             )
         }
-        .onAppear { loadCurrent() }
+        .onAppear {
+            Task { await maybeLoadSelectedAlbumAssets() }
+        }
         .alert(localSession.isAlbumMode ? "Album creation failed" : "Finalisation failed",
                isPresented: .constant(albumError != nil)) {
             Button("OK") { albumError = nil }
@@ -701,7 +872,7 @@ struct AlbumSwipeStep: View {
     }
 
     private var skippedAndUntaggedIDs: [String] {
-        let decided = Set(localSession.approvedPhotoIDs + localSession.toDeletePhotoIDs)
+        let decided = Set(localSession.approvedPhotoIDs + localSession.toDeletePhotoIDs + localSession.skippedPhotoIDs + localSession.favoritedPhotoIDs)
         return localSession.swipePhotoIDs.filter { !decided.contains($0) }
     }
 
@@ -716,7 +887,9 @@ struct AlbumSwipeStep: View {
                 .font(.title2.weight(.semibold))
             VStack(spacing: 8) {
                 summaryRow(icon: "heart.fill", color: .green,
-                           text: "\(localSession.approvedPhotoIDs.count) \(isAlbum ? "added to album" : "kept")")
+                           text: "\(selectedCount) \(isAlbum ? "added to album" : "kept")")
+                summaryRow(icon: "star.fill", color: .pink,
+                           text: "\(localSession.favoritedPhotoIDs.count) favorited")
                 summaryRow(icon: "arrow.down.circle.fill", color: .blue,
                            text: "\(localSession.skippedPhotoIDs.count) \(isAlbum ? "kept but not in album" : "skipped")")
                 summaryRow(icon: "trash.fill", color: .red,
@@ -775,28 +948,72 @@ struct AlbumSwipeStep: View {
         guard localSession.currentSwipeIndex < localSession.swipePhotoIDs.count else { return }
         let id = localSession.swipePhotoIDs[localSession.currentSwipeIndex]
 
+        let alreadyFavorited = localSession.favoritedPhotoIDs.contains(id)
+
         // If the photo was previously approved and is in the album, but we're now changing
-        // the decision, remove it from the album immediately.
-        if action != .approve && addedToAlbumIDs.contains(id) {
+        // the decision, remove it from the album immediately. Favorites should stay in album.
+        if action != .approve && action != .favorite && addedToAlbumIDs.contains(id) {
             addedToAlbumIDs.remove(id)
             Task { await removePhotoFromAlbum(id: id) }
+        }
+
+        // If we change away from favorite, clear it in Photos.
+        if action != .favorite && alreadyFavorited {
+            localSession.favoritedPhotoIDs.removeAll { $0 == id }
+            Task {
+                try? await photoService.setFavorite(false, assetID: id)
+            }
         }
 
         // Replace any existing decision.
         localSession.approvedPhotoIDs.removeAll { $0 == id }
         localSession.toDeletePhotoIDs.removeAll { $0 == id }
         localSession.skippedPhotoIDs.removeAll { $0 == id }
+        localSession.favoritedPhotoIDs.removeAll { $0 == id }
+
         switch action {
         case .approve:
             localSession.approvedPhotoIDs.append(id)
-            // Add to the album right away (only if not already there).
             if !addedToAlbumIDs.contains(id) {
                 addedToAlbumIDs.insert(id)
                 Task { await addPhotoToAlbum(id: id) }
             }
-        case .delete: localSession.toDeletePhotoIDs.append(id)
-        case .skip:   localSession.skippedPhotoIDs.append(id)
+
+        case .delete:
+            localSession.toDeletePhotoIDs.append(id)
+
+        case .skip:
+            localSession.skippedPhotoIDs.append(id)
+
+        case .favorite:
+            if alreadyFavorited {
+                // Toggle: un-favorite the photo when swiping up again.
+                // Keep approved state in album mode.
+                if localSession.isAlbumMode {
+                    localSession.approvedPhotoIDs.append(id)
+                    if !addedToAlbumIDs.contains(id) {
+                        addedToAlbumIDs.insert(id)
+                        Task { await addPhotoToAlbum(id: id) }
+                    }
+                }
+                Task {
+                    try? await photoService.setFavorite(false, assetID: id)
+                }
+            } else {
+                localSession.favoritedPhotoIDs.append(id)
+                Task {
+                    try? await photoService.setFavorite(true, assetID: id)
+                }
+                if localSession.isAlbumMode {
+                    localSession.approvedPhotoIDs.append(id)
+                    if !addedToAlbumIDs.contains(id) {
+                        addedToAlbumIDs.insert(id)
+                        Task { await addPhotoToAlbum(id: id) }
+                    }
+                }
+            }
         }
+
         localSession.currentSwipeIndex += 1
         onUpdate(localSession)
         loadCurrent()
@@ -805,13 +1022,22 @@ struct AlbumSwipeStep: View {
     /// Applies a tagging decision for an arbitrary photo ID without advancing the swipe index.
     /// Used by the skipped/untagged review so the user can re-tag before finalising.
     private func applyDecision(id: String, action: AlbumSwipeAction) {
-        if action != .approve && addedToAlbumIDs.contains(id) {
+        let alreadyFavorited = localSession.favoritedPhotoIDs.contains(id)
+
+        if action != .approve && action != .favorite && addedToAlbumIDs.contains(id) {
             addedToAlbumIDs.remove(id)
             Task { await removePhotoFromAlbum(id: id) }
+        }
+        if action != .favorite && alreadyFavorited {
+            localSession.favoritedPhotoIDs.removeAll { $0 == id }
+            Task {
+                try? await photoService.setFavorite(false, assetID: id)
+            }
         }
         localSession.approvedPhotoIDs.removeAll { $0 == id }
         localSession.toDeletePhotoIDs.removeAll { $0 == id }
         localSession.skippedPhotoIDs.removeAll { $0 == id }
+        localSession.favoritedPhotoIDs.removeAll { $0 == id }
         switch action {
         case .approve:
             localSession.approvedPhotoIDs.append(id)
@@ -819,8 +1045,35 @@ struct AlbumSwipeStep: View {
                 addedToAlbumIDs.insert(id)
                 Task { await addPhotoToAlbum(id: id) }
             }
-        case .delete: localSession.toDeletePhotoIDs.append(id)
-        case .skip:   localSession.skippedPhotoIDs.append(id)
+        case .delete:
+            localSession.toDeletePhotoIDs.append(id)
+        case .skip:
+            localSession.skippedPhotoIDs.append(id)
+        case .favorite:
+            if alreadyFavorited {
+                if localSession.isAlbumMode {
+                    localSession.approvedPhotoIDs.append(id)
+                    if !addedToAlbumIDs.contains(id) {
+                        addedToAlbumIDs.insert(id)
+                        Task { await addPhotoToAlbum(id: id) }
+                    }
+                }
+                Task {
+                    try? await photoService.setFavorite(false, assetID: id)
+                }
+            } else {
+                localSession.favoritedPhotoIDs.append(id)
+                Task {
+                    try? await photoService.setFavorite(true, assetID: id)
+                }
+                if localSession.isAlbumMode {
+                    localSession.approvedPhotoIDs.append(id)
+                    if !addedToAlbumIDs.contains(id) {
+                        addedToAlbumIDs.insert(id)
+                        Task { await addPhotoToAlbum(id: id) }
+                    }
+                }
+            }
         }
         onUpdate(localSession)
     }
@@ -855,6 +1108,7 @@ struct AlbumSwipeStep: View {
     private var currentDecision: AlbumSwipeAction? {
         guard localSession.currentSwipeIndex < localSession.swipePhotoIDs.count else { return nil }
         let id = localSession.swipePhotoIDs[localSession.currentSwipeIndex]
+        if localSession.favoritedPhotoIDs.contains(id) { return .favorite }
         if localSession.approvedPhotoIDs.contains(id) { return .approve }
         if localSession.toDeletePhotoIDs.contains(id) { return .delete }
         if localSession.skippedPhotoIDs.contains(id)  { return .skip }
@@ -875,6 +1129,37 @@ struct AlbumSwipeStep: View {
         }
         currentAsset = nil
         burstSiblings = []
+    }
+
+    private func maybeLoadSelectedAlbumAssets() async {
+        guard localSession.swipePhotoIDs.isEmpty,
+              let albumID = localSession.selectedAlbumIdentifier else {
+            loadCurrent()
+            return
+        }
+
+        let collectionResult = PHAssetCollection.fetchAssetCollections(withLocalIdentifiers: [albumID], options: nil)
+        guard let collection = collectionResult.firstObject else {
+            loadCurrent()
+            return
+        }
+
+        var assetIDs: [String] = []
+        let fetchOptions = PHFetchOptions()
+        fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
+        let assets = PHAsset.fetchAssets(in: collection, options: fetchOptions)
+        assets.enumerateObjects { asset, _, _ in assetIDs.append(asset.localIdentifier) }
+
+        if !assetIDs.isEmpty {
+            localSession.swipePhotoIDs = assetIDs
+            localSession.currentSwipeIndex = 0
+            localSession.state = .swiping
+            onUpdate(localSession)
+            loadCurrent()
+        } else {
+            currentAsset = nil
+            burstSiblings = []
+        }
     }
 
     private func loadBurstSiblings(for asset: PHAsset) {
@@ -1025,6 +1310,9 @@ struct AlbumCompletedView: View {
                 Text("\(session.toDeletePhotoIDs.count) photos deleted.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                Text("\(session.favoritedPhotoIDs.count) photos favorited.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 if skippedAndUntaggedCount > 0 {
                     Text("\(skippedAndUntaggedCount) skipped or untagged.")
                         .font(.subheadline)
@@ -1125,6 +1413,10 @@ struct SkippedPhotosReviewView: View {
                                   isActive: localDecisions[asset.localIdentifier] == .skip) {
                             apply(.skip, to: asset)
                         }
+                        tagButton(label: "Favorite", icon: "star.fill", color: .pink,
+                                  isActive: localDecisions[asset.localIdentifier] == .favorite) {
+                            apply(.favorite, to: asset)
+                        }
                         tagButton(label: isAlbumMode ? "Add" : "Keep", icon: "heart.fill", color: .green,
                                   isActive: localDecisions[asset.localIdentifier] == .approve) {
                             apply(.approve, to: asset)
@@ -1151,6 +1443,7 @@ struct SkippedPhotosReviewView: View {
         let (label, icon, color): (String, String, Color) = {
             switch decision {
             case .approve: return (isAlbumMode ? "Added to album" : "Kept", "heart.fill", .green)
+            case .favorite: return ("Favorited", "star.fill", .pink)
             case .delete:  return ("Marked for deletion", "trash.fill", .red)
             case .skip:    return ("Skipped", "arrow.down.circle.fill", .blue)
             }
@@ -1220,15 +1513,16 @@ struct SkippedPhotosReviewView: View {
 
 // MARK: - Swipe card
 
-enum AlbumSwipeAction { case approve, delete, skip }
+enum AlbumSwipeAction { case approve, delete, skip, favorite }
 
 private enum SwipeDir {
-    case right, left, down, none
+    case right, left, down, up, none
     var color: Color {
         switch self {
         case .right: return .green
         case .left:  return .red
         case .down:  return .blue
+        case .up:    return .pink
         case .none:  return .clear
         }
     }
@@ -1237,6 +1531,7 @@ private enum SwipeDir {
         case .right: return "Add to album"
         case .left:  return "Delete"
         case .down:  return "Skip"
+        case .up:    return "Favorite"
         case .none:  return ""
         }
     }
@@ -1245,6 +1540,7 @@ private enum SwipeDir {
         case .right: return "heart.fill"
         case .left:  return "trash.fill"
         case .down:  return "arrow.down.circle.fill"
+        case .up:    return "star.fill"
         case .none:  return ""
         }
     }
@@ -1262,9 +1558,21 @@ struct SwipeCardView: View {
 
     private let threshold: CGFloat = 100
 
+    // Visual feedback direction (for overlay) while dragging.
+    // Uses a smaller threshold so the UI reacts immediately.
+    private var dragDir: SwipeDir {
+        if dragOffset.width > 20  { return .right }
+        if dragOffset.width < -20 { return .left }
+        if dragOffset.height < -20 { return .up }
+        if dragOffset.height > 20 { return .down }
+        return .none
+    }
+
+    // Commit decision direction (requires deliberate gesture).
     private var swipeDir: SwipeDir {
         if dragOffset.width > 60  { return .right }
         if dragOffset.width < -60 { return .left }
+        if dragOffset.height < -60 { return .up }
         if dragOffset.height > 60 { return .down }
         return .none
     }
@@ -1283,7 +1591,7 @@ struct SwipeCardView: View {
                     )
 
                 // Previous-decision banner — top of photo, shown when idle
-                if let prior = existingDecision, swipeDir == .none {
+                if let prior = existingDecision, dragDir == .none {
                     VStack {
                         existingDecisionBanner(prior)
                             .padding(.top, 12)
@@ -1291,10 +1599,16 @@ struct SwipeCardView: View {
                     }
                 }
 
-                // Gesture hint strip — always visible at the bottom when idle
-                if swipeDir == .none {
-                    VStack {
+                // Gesture hint strip (top + bottom) when idle
+                if dragDir == .none {
+                    VStack(spacing: 4) {
+                        Text("Swipe up to favorite")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.pink)
+                            .padding(.top, 12)
+
                         Spacer()
+
                         HStack(spacing: 0) {
                             Label("Delete", systemImage: "trash")
                                 .foregroundStyle(.red)
@@ -1312,8 +1626,8 @@ struct SwipeCardView: View {
                     }
                 }
 
-                // Action overlay during drag
-                if swipeDir != .none {
+                // Action overlay during drag (real-time drag direction)
+                if dragDir != .none {
                     VStack {
                         HStack {
                             if swipeDir == .right {
@@ -1329,6 +1643,11 @@ struct SwipeCardView: View {
                         }
                         if swipeDir == .down {
                             actionLabel(swipeDir).padding(.top, 20)
+                        }
+                        if swipeDir == .up {
+                            actionLabel(swipeDir)
+                                .font(.title2.weight(.bold))
+                                .padding(.top, 20)
                         }
                         Spacer()
                     }
@@ -1370,6 +1689,7 @@ struct SwipeCardView: View {
         let (icon, label, color): (String, String, Color) = {
             switch decision {
             case .approve: return ("heart.fill", isAlbumMode ? "Added to album" : "Kept", .green)
+            case .favorite: return ("star.fill", "Favorited", .pink)
             case .delete:  return ("trash.fill",             "Marked for deletion", .red)
             case .skip:    return ("arrow.down.circle.fill", "Skipped",         .blue)
             }
@@ -1392,6 +1712,9 @@ struct SwipeCardView: View {
         } else if translation.width < -threshold {
             action = .delete
             target = CGSize(width: -1200, height: 0)
+        } else if translation.height < -threshold {
+            action = .favorite
+            target = CGSize(width: 0, height: -1200)
         } else if translation.height > threshold {
             action = .skip
             target = CGSize(width: 0, height: 1200)

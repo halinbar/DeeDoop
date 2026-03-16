@@ -275,6 +275,16 @@ final class PhotoLibraryService: ObservableObject {
         let main = resources.first { $0.type == .photo || $0.type == .video || $0.type == .alternatePhoto }
         return (main ?? resources.first)?.originalFilename
     }
+
+    /// Mark or unmark an asset as a favorite in the Photos library.
+    func setFavorite(_ isFavorite: Bool, assetID: String) async throws {
+        let result = PHAsset.fetchAssets(withLocalIdentifiers: [assetID], options: nil)
+        guard let asset = result.firstObject else { return }
+        try await PHPhotoLibrary.shared().performChanges {
+            let request = PHAssetChangeRequest(for: asset)
+            request.isFavorite = isFavorite
+        }
+    }
     
     /// Delete the given assets from the photo library (keeps one, removes the rest).
     func deleteAssets(_ assets: [PHAsset]) async throws {

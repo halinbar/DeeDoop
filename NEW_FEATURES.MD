@@ -2,9 +2,12 @@
 In Progress
 
 
+
 To Do
-- add swipe up to save as a favorite
-- sync with existing albums and manage them through the app
+- fix counters, or remove them
+- instead of test- on the top of the picture show a favorites icon
+- fix crop
+- fix rotate
 - add clip embedding to the app.
 --- start using it to delete utility photos
 - sync with google photos, google drive, icloud.
@@ -21,6 +24,8 @@ Backlog
 
 
 Done
+- add swipe up to save as a favorite
+- sync with existing albums and manage them through the app
 - Find and delte duplicated photos
 - Find and delte duplicated videos
 - Find duplicated files and copy their names

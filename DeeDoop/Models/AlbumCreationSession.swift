@@ -21,6 +21,8 @@ struct AlbumCreationSession: Codable, Identifiable, Hashable {
     var approvedPhotoIDs: [String]
     var skippedPhotoIDs: [String]
     var toDeletePhotoIDs: [String]
+    var favoritedPhotoIDs: [String]
+    var selectedAlbumIdentifier: String?
 
     var createdAlbumIdentifier: String?
     var createdAt: Date
@@ -41,7 +43,8 @@ struct AlbumCreationSession: Codable, Identifiable, Hashable {
     enum CodingKeys: String, CodingKey {
         case id, albumName, startDate, endDate, state, isAlbumMode
         case swipePhotoIDs, currentSwipeIndex
-        case approvedPhotoIDs, skippedPhotoIDs, toDeletePhotoIDs
+        case approvedPhotoIDs, skippedPhotoIDs, toDeletePhotoIDs, favoritedPhotoIDs
+        case selectedAlbumIdentifier
         case createdAlbumIdentifier, createdAt
     }
 
@@ -58,6 +61,8 @@ struct AlbumCreationSession: Codable, Identifiable, Hashable {
         approvedPhotoIDs      = try c.decode([String].self, forKey: .approvedPhotoIDs)
         skippedPhotoIDs       = try c.decode([String].self, forKey: .skippedPhotoIDs)
         toDeletePhotoIDs      = try c.decode([String].self, forKey: .toDeletePhotoIDs)
+        favoritedPhotoIDs     = try c.decodeIfPresent([String].self, forKey: .favoritedPhotoIDs) ?? []
+        selectedAlbumIdentifier = try c.decodeIfPresent(String.self, forKey: .selectedAlbumIdentifier)
         createdAlbumIdentifier = try c.decodeIfPresent(String.self, forKey: .createdAlbumIdentifier)
         createdAt             = try c.decode(Date.self,    forKey: .createdAt)
     }
@@ -65,7 +70,7 @@ struct AlbumCreationSession: Codable, Identifiable, Hashable {
     init(id: UUID, albumName: String, startDate: Date?, endDate: Date?,
          state: State, isAlbumMode: Bool,
          swipePhotoIDs: [String], currentSwipeIndex: Int,
-         approvedPhotoIDs: [String], skippedPhotoIDs: [String], toDeletePhotoIDs: [String],
+         approvedPhotoIDs: [String], skippedPhotoIDs: [String], toDeletePhotoIDs: [String], favoritedPhotoIDs: [String], selectedAlbumIdentifier: String?,
          createdAlbumIdentifier: String?, createdAt: Date) {
         self.id = id
         self.albumName = albumName
@@ -78,6 +83,8 @@ struct AlbumCreationSession: Codable, Identifiable, Hashable {
         self.approvedPhotoIDs = approvedPhotoIDs
         self.skippedPhotoIDs = skippedPhotoIDs
         self.toDeletePhotoIDs = toDeletePhotoIDs
+        self.favoritedPhotoIDs = favoritedPhotoIDs
+        self.selectedAlbumIdentifier = selectedAlbumIdentifier
         self.createdAlbumIdentifier = createdAlbumIdentifier
         self.createdAt = createdAt
     }
@@ -89,7 +96,7 @@ struct AlbumCreationSession: Codable, Identifiable, Hashable {
             id: UUID(), albumName: "", startDate: nil, endDate: nil,
             state: .naming, isAlbumMode: true,
             swipePhotoIDs: [], currentSwipeIndex: 0,
-            approvedPhotoIDs: [], skippedPhotoIDs: [], toDeletePhotoIDs: [],
+            approvedPhotoIDs: [], skippedPhotoIDs: [], toDeletePhotoIDs: [], favoritedPhotoIDs: [], selectedAlbumIdentifier: nil,
             createdAlbumIdentifier: nil, createdAt: Date()
         )
     }
@@ -99,7 +106,7 @@ struct AlbumCreationSession: Codable, Identifiable, Hashable {
             id: UUID(), albumName: "", startDate: nil, endDate: nil,
             state: .naming, isAlbumMode: false,
             swipePhotoIDs: [], currentSwipeIndex: 0,
-            approvedPhotoIDs: [], skippedPhotoIDs: [], toDeletePhotoIDs: [],
+            approvedPhotoIDs: [], skippedPhotoIDs: [], toDeletePhotoIDs: [], favoritedPhotoIDs: [], selectedAlbumIdentifier: nil,
             createdAlbumIdentifier: nil, createdAt: Date()
         )
     }
